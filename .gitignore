@@ -31,3 +31,4 @@ dumps/
 
 # Test files
 test-*.js
+*.backup
