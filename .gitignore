@@ -1,0 +1,33 @@
+# Node
+node_modules/
+package-lock.json
+
+# Environment
+.env
+.env.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Credentials
+*.key
+*.pem
+credentials.json
+*-credentials.json
+
+# Storage (don't commit user data)
+storage/
+*.pdf
+*.docx
+
+# Database dumps
+*.sql
+dumps/
+
+# Test files
+test-*.js
