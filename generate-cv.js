@@ -1,18 +1,9 @@
 #!/usr/bin/env node
 
 const https = require('https');
-const fs = require('fs');
+const { simplifyProfile } = require('./simplify-profile.js');
 
-function escapeJson(str) {
-  return str
-    .replace(/\\/g, '\\\\')
-    .replace(/"/g, '\\"')
-    .replace(/\n/g, '\\n')
-    .replace(/\r/g, '\\r')
-    .replace(/\t/g, '\\t');
-}
-
-async function callClaude(prompt) {
+async function callClaude(prompt, model = "claude-haiku-4-5-20251001") {
   return new Promise((resolve, reject) => {
     const apiKey = process.env.ANTHROPIC_API_KEY;
     
@@ -22,7 +13,7 @@ async function callClaude(prompt) {
     }
     
     const data = JSON.stringify({
-      model: "claude-haiku-4-5-20251001",
+      model: model,
       max_tokens: 4000,
       messages: [{
         role: "user",
@@ -66,121 +57,140 @@ async function callClaude(prompt) {
   });
 }
 
-async function generateCV(jobData, profileData, matchedSkills = []) {
-  console.error('📝 Generating CV with Claude Haiku 4.5...');
-  
-  let prompt = fs.readFileSync(__dirname + '/generate-cv-prompt.txt', 'utf8');
-  
-  // Simplify profile data to avoid huge payloads
-  const simplifiedProfile = {
-    name: profileData.full_name,
-    email: profileData.email,
-    phone: profileData.phone,
-    location: profileData.location,
-    headline: profileData.headline,
-    summary: profileData.summary,
-    work_experience: profileData.work_experience,
-    education: profileData.education,
-    certifications: profileData.certifications,
-    projects: profileData.projects,
-    technical_skills: profileData.technical_skills,
-    soft_skills: profileData.soft_skills
-  };
-  
-  prompt = prompt
-    .replace('{PROFILE_DATA}', JSON.stringify(simplifiedProfile, null, 2))
-    .replace('{JOB_TITLE}', jobData.title || '')
-    .replace('{JOB_COMPANY}', jobData.company || 'the company')
-    .replace('{JOB_DESCRIPTION}', (jobData.description || '').substring(0, 3000)) // Limit description length
-    .replace('{MATCHED_SKILLS}', matchedSkills.join(', ') || 'general skills');
+async function generateCV(jobData, profileData, matchedSkills) {
+  // NO CONSOLE LOGS
   
   try {
+    const simplifiedProfile = simplifyProfile(profileData, jobData);
+    const shortDescription = (jobData.description || '').slice(0, 1200);
+    
+    const prompt = `You are a professional CV writer. Create a tailored CV for this job application.
+
+JOB POSTING:
+Title: ${jobData.title}
+Company: ${jobData.company}
+Location: ${jobData.location || 'Not specified'}
+Description: ${shortDescription}
+
+CANDIDATE PROFILE:
+${JSON.stringify(simplifiedProfile, null, 2)}
+
+MATCHED SKILLS:
+${JSON.stringify(matchedSkills, null, 2)}
+
+INSTRUCTIONS:
+1. Use ONLY information from the profile provided - DO NOT invent experience
+2. Highlight the ${matchedSkills.slice(0, 5).join(', ')} skills prominently
+3. Reorder work experience to show most relevant roles first
+4. Keep bullet points concise and impact-focused
+5. Total length: 1 page equivalent (500-600 words)
+
+Format as clean markdown with sections:
+# [Name]
+[Headline]
+
+## Professional Summary
+[2-3 sentences highlighting relevant experience]
+
+## Work Experience
+[Most relevant roles first, 3-5 bullets each]
+
+## Skills
+[Grouped by category]
+
+## Education
+[Highest degree first]
+
+Return ONLY the markdown CV, no preamble or explanation.`;
+
     const cv = await callClaude(prompt);
-    console.error('✅ CV generated');
     return cv;
     
   } catch (error) {
-    console.error('❌ CV generation failed:', error.message);
     throw error;
   }
 }
 
-async function generateCoverLetter(jobData, profileData, matchedSkills = []) {
-  console.error('✉️  Generating cover letter with Claude Haiku 4.5...');
-  
-  let prompt = fs.readFileSync(__dirname + '/generate-cover-letter-prompt.txt', 'utf8');
-  
-  // Simplify profile data
-  const simplifiedProfile = {
-    name: profileData.full_name,
-    email: profileData.email,
-    phone: profileData.phone,
-    location: profileData.location,
-    headline: profileData.headline,
-    summary: profileData.summary,
-    work_experience: profileData.work_experience,
-    technical_skills: profileData.technical_skills
-  };
-  
-  prompt = prompt
-    .replace('{PROFILE_DATA}', JSON.stringify(simplifiedProfile, null, 2))
-    .replace('{JOB_TITLE}', jobData.title || '')
-    .replace('{JOB_COMPANY}', jobData.company || 'the company')
-    .replace('{JOB_DESCRIPTION}', (jobData.description || '').substring(0, 2000))
-    .replace('{MATCHED_SKILLS}', matchedSkills.join(', ') || 'general skills');
+async function generateCoverLetter(jobData, profileData, matchedSkills) {
+  // NO CONSOLE LOGS
   
   try {
+    const simplifiedProfile = simplifyProfile(profileData, jobData);
+    const shortDescription = (jobData.description || '').slice(0, 1200);
+    
+    const prompt = `Write a professional cover letter for this job application.
+
+JOB:
+Title: ${jobData.title}
+Company: ${jobData.company}
+Description: ${shortDescription}
+
+CANDIDATE:
+${JSON.stringify(simplifiedProfile, null, 2)}
+
+KEY MATCHED SKILLS: ${matchedSkills.slice(0, 5).join(', ')}
+
+INSTRUCTIONS:
+1. 3 paragraphs maximum (250-300 words total)
+2. Opening: Why you're interested in this specific role/company
+3. Body: 2-3 most relevant achievements that match job requirements
+4. Closing: Enthusiasm and call to action
+5. Professional but conversational tone
+6. NO generic fluff - be specific about the match
+
+Format as plain text letter with proper spacing.
+Include: [Your Name], [Email], [Phone] at top.
+
+Return ONLY the letter text, no preamble.`;
+
     const letter = await callClaude(prompt);
-    console.error('✅ Cover letter generated');
     return letter;
     
   } catch (error) {
-    console.error('❌ Cover letter generation failed:', error.message);
     throw error;
   }
 }
 
+// Main execution
 if (require.main === module) {
   const args = process.argv.slice(2);
-  const command = args[0];
   
-  if (!process.env.ANTHROPIC_API_KEY) {
-    console.error('❌ ANTHROPIC_API_KEY not set');
+  if (args.length < 4) {
+    console.error('Usage: node generate-cv.js <type> <job-json> <profile-json> <matched-skills-json>');
+    console.error('  type: "cv" or "letter"');
     process.exit(1);
   }
   
-  if (command === 'cv') {
-    const jobData = JSON.parse(args[1]);
-    const profileData = JSON.parse(args[2]);
-    const matchedSkills = args[3] ? JSON.parse(args[3]) : [];
+  const [type, jobJson, profileJson, matchedSkillsJson] = args;
+  
+  try {
+    const jobData = JSON.parse(jobJson);
+    const profileData = JSON.parse(profileJson);
+    const matchedSkills = JSON.parse(matchedSkillsJson);
     
-    generateCV(jobData, profileData, matchedSkills)
-      .then(cv => {
-        console.log(cv);
-        process.exit(0);
-      })
-      .catch(error => {
-        console.error(error);
-        process.exit(1);
-      });
-      
-  } else if (command === 'letter') {
-    const jobData = JSON.parse(args[1]);
-    const profileData = JSON.parse(args[2]);
-    const matchedSkills = args[3] ? JSON.parse(args[3]) : [];
+    if (type === 'cv') {
+      generateCV(jobData, profileData, matchedSkills)
+        .then(cv => {
+          console.log('--- CV START ---');
+          console.log(cv);
+          console.log('--- CV END ---');
+          process.exit(0);
+        });
+    } else if (type === 'letter') {
+      generateCoverLetter(jobData, profileData, matchedSkills)
+        .then(letter => {
+          console.log('--- COVER LETTER START ---');
+          console.log(letter);
+          console.log('--- COVER LETTER END ---');
+          process.exit(0);
+        });
+    } else {
+      console.error('Type must be "cv" or "letter"');
+      process.exit(1);
+    }
     
-    generateCoverLetter(jobData, profileData, matchedSkills)
-      .then(letter => {
-        console.log(letter);
-        process.exit(0);
-      })
-      .catch(error => {
-        console.error(error);
-        process.exit(1);
-      });
-      
-  } else {
-    console.error('Usage: node generate-cv.js <cv|letter> <job-json> <profile-json> [matched-skills-json]');
+  } catch (error) {
+    console.error('Error:', error.message);
     process.exit(1);
   }
 }

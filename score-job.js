@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 const https = require('https');
-const fs = require('fs');
+const { simplifyProfile } = require('./simplify-profile.js');
 
 async function callClaude(prompt) {
   return new Promise((resolve, reject) => {
@@ -29,7 +29,7 @@ async function callClaude(prompt) {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
-        'Content-Length': data.length
+        'Content-Length': Buffer.byteLength(data)
       }
     };
 
@@ -58,43 +58,47 @@ async function callClaude(prompt) {
 }
 
 async function scoreJob(jobData, profileData) {
-  let prompt = fs.readFileSync(__dirname + '/score-job-prompt.txt', 'utf8');
-  
-  prompt = prompt
-    .replace('{PROFILE_DATA}', JSON.stringify(profileData, null, 2))
-    .replace('{JOB_TITLE}', jobData.title)
-    .replace('{JOB_COMPANY}', jobData.company || 'Not specified')
-    .replace('{JOB_LOCATION}', jobData.location || 'Not specified')
-    .replace('{JOB_DESCRIPTION}', jobData.description || 'No description');
-  
-  console.error('🤖 Scoring with Claude Haiku 4.5...');
+  // NO CONSOLE LOGS - only output JSON
   
   try {
+    // Simplify profile based on job relevance
+    const simplifiedProfile = simplifyProfile(profileData, jobData);
+    
+    // Limit job description to 1500 chars
+    const shortDescription = (jobData.description || '').slice(0, 1500);
+    
+    const prompt = `You are a job matching AI. Score how well this candidate matches this job from 0-100.
+
+JOB:
+Title: ${jobData.title}
+Company: ${jobData.company}
+Location: ${jobData.location || 'Not specified'}
+Description: ${shortDescription}
+
+CANDIDATE PROFILE:
+${JSON.stringify(simplifiedProfile, null, 2)}
+
+Respond with ONLY valid JSON (no markdown, no backticks):
+{
+  "score": 85,
+  "reasoning": "Brief explanation of the match quality and key factors",
+  "required_skills": ["skill1", "skill2"],
+  "matched_skills": ["skill1", "skill2"],
+  "missing_skills": ["skill3"],
+  "key_highlights": ["highlight1", "highlight2"]
+}`;
+
     const response = await callClaude(prompt);
     
     // Clean response
-    let cleaned = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    let cleaned = response.trim();
+    cleaned = cleaned.replace(/```json\s*/g, '').replace(/```\s*/g, '');
     
-    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('No JSON found in response');
-    }
-    
-    const result = JSON.parse(jsonMatch[0]);
-    
-    if (!result.score || !result.reasoning) {
-      throw new Error('Invalid response format');
-    }
-    
-    result.score = Math.max(0, Math.min(100, parseInt(result.score)));
-    
-    console.error('✅ Score:', result.score);
-    
+    const result = JSON.parse(cleaned);
     return result;
     
   } catch (error) {
-    console.error('❌ Scoring error:', error.message);
-    
+    // Return error as valid JSON
     return {
       score: 50,
       reasoning: `Failed to score: ${error.message}`,
@@ -106,6 +110,7 @@ async function scoreJob(jobData, profileData) {
   }
 }
 
+// Main execution
 if (require.main === module) {
   const args = process.argv.slice(2);
   
@@ -114,18 +119,24 @@ if (require.main === module) {
     process.exit(1);
   }
   
-  const jobData = JSON.parse(args[0]);
-  const profileData = JSON.parse(args[1]);
-  
-  scoreJob(jobData, profileData)
-    .then(result => {
-      console.log(JSON.stringify(result, null, 2));
-      process.exit(0);
-    })
-    .catch(error => {
-      console.error('Fatal error:', error);
-      process.exit(1);
-    });
+  try {
+    const jobData = JSON.parse(args[0]);
+    const profileData = JSON.parse(args[1]);
+    
+    scoreJob(jobData, profileData)
+      .then(result => {
+        // ONLY output JSON, nothing else
+        console.log(JSON.stringify(result, null, 2));
+        process.exit(0);
+      })
+      .catch(error => {
+        console.error('Fatal error:', error);
+        process.exit(1);
+      });
+  } catch (error) {
+    console.error('Parse error:', error.message);
+    process.exit(1);
+  }
 }
 
 module.exports = { scoreJob };

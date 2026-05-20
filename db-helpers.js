@@ -1,96 +1,103 @@
 #!/usr/bin/env node
 
 const { exec } = require('child_process');
-const util = require('util');
-const execPromise = util.promisify(exec);
+const { promisify } = require('util');
+const execAsync = promisify(exec);
 
-const DB_NAME = 'job_automation';
-
-async function query(sql) {
-  const cmd = `sudo -u postgres psql ${DB_NAME} -t -c "${sql}"`;
-  const { stdout } = await execPromise(cmd);
-  return stdout.trim();
+async function getUnscoredJobs() {
+  const { stdout } = await execAsync(`sudo -u postgres psql job_automation -t -A -F'|' -c "
+    SELECT row_to_json(t) FROM (
+      SELECT * FROM jobs 
+      WHERE status = 'new' 
+        AND fetch_status = 'success'
+      ORDER BY created_at DESC
+      LIMIT 20
+    ) t;
+  "`);
+  
+  const lines = stdout.trim().split('\n').filter(Boolean);
+  return lines.map(line => JSON.parse(line));
 }
 
 async function getProfile() {
-  const result = await query(
-    "SELECT row_to_json(profiles) FROM profiles LIMIT 1;"
-  );
-  return result ? JSON.parse(result) : null;
-}
-
-async function getUnscoredJobs() {
-  const sql = `
-    SELECT json_agg(row_to_json(t)) 
-    FROM (
-      SELECT id, title, company, location, description, source_url
-      FROM jobs 
-      WHERE status = 'new' 
-      AND fetch_status = 'success'
-      AND description IS NOT NULL
-      ORDER BY created_at DESC
-      LIMIT 10
+  const { stdout } = await execAsync(`sudo -u postgres psql job_automation -t -A -c "
+    SELECT row_to_json(t) FROM (
+      SELECT * FROM profiles 
+      ORDER BY created_at DESC 
+      LIMIT 1
     ) t;
-  `;
+  "`);
   
-  const result = await query(sql);
-  
-  if (!result || result === 'null') {
-    return [];
-  }
-  
-  return JSON.parse(result);
+  return JSON.parse(stdout.trim());
 }
 
-async function updateJobScore(jobId, scoreData) {
-  // Use parameterized approach to avoid escaping issues
-  const { exec } = require('child_process');
-  const fs = require('fs');
-  const tmpFile = `/tmp/update_job_${jobId}.sql`;
+async function updateJobScore(jobId, scoreResult) {
+  // Properly escape all strings for PostgreSQL
+  const escapeForPsql = (str) => {
+    if (!str) return '';
+    // Replace single quotes with double single quotes for SQL
+    return str.replace(/'/g, "''").replace(/\\/g, '\\\\');
+  };
   
-  // Write SQL to temp file to avoid shell escaping issues
-  const sql = `
-UPDATE jobs SET
-  ai_score = ${scoreData.score},
-  ai_reasoning = $REASON$${scoreData.reasoning}$REASON$,
-  required_skills = '${JSON.stringify(scoreData.required_skills || [])}'::jsonb,
-  matched_skills = '${JSON.stringify(scoreData.matched_skills || [])}'::jsonb,
-  missing_skills = '${JSON.stringify(scoreData.missing_skills || [])}'::jsonb,
+  const reasoning = escapeForPsql(scoreResult.reasoning);
+  const requiredSkills = JSON.stringify(scoreResult.required_skills || []).replace(/'/g, "''");
+  const matchedSkills = JSON.stringify(scoreResult.matched_skills || []).replace(/'/g, "''");
+  const missingSkills = JSON.stringify(scoreResult.missing_skills || []).replace(/'/g, "''");
+  
+  // Use heredoc to avoid shell parsing issues
+  const { stdout, stderr } = await execAsync(`sudo -u postgres psql job_automation << 'SQLEOF'
+UPDATE jobs 
+SET 
+  ai_score = ${scoreResult.score},
+  ai_reasoning = '${reasoning}',
+  required_skills = '${requiredSkills}'::jsonb,
+  matched_skills = '${matchedSkills}'::jsonb,
+  missing_skills = '${missingSkills}'::jsonb,
   status = 'scored',
   updated_at = NOW()
 WHERE id = '${jobId}';
-`;
+SQLEOF
+`);
   
-  fs.writeFileSync(tmpFile, sql);
+  if (stderr && !stderr.includes('UPDATE')) {
+    throw new Error(stderr);
+  }
+}
+
+// Main CLI
+async function main() {
+  const command = process.argv[2];
   
   try {
-    await execPromise(`sudo -u postgres psql ${DB_NAME} -f ${tmpFile}`);
-    fs.unlinkSync(tmpFile);
+    if (command === 'get-unscored') {
+      const jobs = await getUnscoredJobs();
+      console.log(JSON.stringify(jobs, null, 2));
+      
+    } else if (command === 'get-profile') {
+      const profile = await getProfile();
+      console.log(JSON.stringify(profile, null, 2));
+      
+    } else if (command === 'update-score') {
+      const jobId = process.argv[3];
+      const scoreResult = JSON.parse(process.argv[4]);
+      await updateJobScore(jobId, scoreResult);
+      console.log('✅ Score updated');
+      
+    } else {
+      console.error('Usage: node db-helpers.js <get-unscored|get-profile|update-score>');
+      process.exit(1);
+    }
+    
+    process.exit(0);
+    
   } catch (error) {
-    fs.unlinkSync(tmpFile);
-    throw error;
+    console.error('Database error:', error.message);
+    process.exit(1);
   }
 }
 
 if (require.main === module) {
-  const command = process.argv[2];
-  
-  switch (command) {
-    case 'get-profile':
-      getProfile().then(profile => {
-        console.log(JSON.stringify(profile, null, 2));
-      });
-      break;
-      
-    case 'get-unscored':
-      getUnscoredJobs().then(jobs => {
-        console.log(JSON.stringify(jobs, null, 2));
-      });
-      break;
-      
-    default:
-      console.log('Usage: node db-helpers.js <get-profile|get-unscored>');
-  }
+  main();
 }
 
-module.exports = { getProfile, getUnscoredJobs, updateJobScore };
+module.exports = { getUnscoredJobs, getProfile, updateJobScore };
