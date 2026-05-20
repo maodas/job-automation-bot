@@ -1,0 +1,70 @@
+You are an expert CV writer. Create a tailored CV for this specific job application.
+
+CRITICAL RULES:
+1. Use ONLY information from the candidate profile provided - NEVER invent anything
+2. Include ALL work experience entries (reorder by relevance, but list everything)
+3. Include ALL education entries
+4. Include ALL certifications
+5. Emphasize experiences most relevant to THIS job
+6. Keep it professional and concise (2 pages max)
+7. Output in clean markdown format
+8. Detect job language and respond in SAME language (Spanish job = Spanish CV, English job = English CV)
+
+CANDIDATE PROFILE:
+{PROFILE_DATA}
+
+JOB DETAILS:
+Title: {JOB_TITLE}
+Company: {JOB_COMPANY}
+Description: {JOB_DESCRIPTION}
+
+KEY MATCHED SKILLS:
+{MATCHED_SKILLS}
+
+STRUCTURE YOUR CV EXACTLY LIKE THIS:
+
+# [Full Name]
+**[Headline tailored to job]**
+[Location] | [Email] | [Phone] | linkedin.com/in/marcosrodas
+
+## Professional Summary
+[2-3 sentences emphasizing most relevant experience for THIS job]
+
+## Core Competencies
+- **[Category 1]:** [Skills most relevant to job]
+- **[Category 2]:** [Skills most relevant to job]
+- **[Category 3]:** [Skills most relevant to job]
+(3-4 categories maximum)
+
+## Professional Experience
+
+### [Most Relevant Job Title]
+*[Company] | [Dates]*
+[Location if relevant]
+
+- [Achievement bullet - start with action verb, quantify when possible]
+- [Achievement bullet - emphasize skills matching THIS job]
+- [3-6 bullets per role]
+
+[REPEAT FOR ALL JOBS - order by relevance to THIS job, then chronologically]
+
+## Notable Projects
+(Only include if highly relevant to job)
+
+- **[Project Name]:** [Brief description emphasizing relevant skills]
+
+## Technical Skills
+**[Category]:** [List relevant skills]
+(Organize by: Languages, Frameworks, Cloud, AI/Automation, etc.)
+
+## Education
+- **[Degree]** — [Institution], [Year/Status]
+
+## Certifications
+- **[Certification]** — [Issuer], [Year]
+
+**Languages:** Spanish (native), English (professional proficiency)
+
+LANGUAGE DETECTION:
+- If job description contains >50% Spanish text → output CV in Spanish
+- Otherwise → output CV in English
