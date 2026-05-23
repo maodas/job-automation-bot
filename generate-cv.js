@@ -1,12 +1,11 @@
 #!/usr/bin/env node
-
 const https = require('https');
 const { simplifyProfile } = require('./simplify-profile.js');
+const puppeteer = require('puppeteer');
 
 async function callClaude(prompt, model = "claude-haiku-4-5-20251001") {
   return new Promise((resolve, reject) => {
     const apiKey = process.env.ANTHROPIC_API_KEY;
-    
     if (!apiKey) {
       reject(new Error('ANTHROPIC_API_KEY not set'));
       return;
@@ -15,10 +14,7 @@ async function callClaude(prompt, model = "claude-haiku-4-5-20251001") {
     const data = JSON.stringify({
       model: model,
       max_tokens: 4000,
-      messages: [{
-        role: "user",
-        content: prompt
-      }]
+      messages: [{role: "user", content: prompt}]
     });
 
     const options = {
@@ -38,7 +34,7 @@ async function callClaude(prompt, model = "claude-haiku-4-5-20251001") {
       res.on('data', chunk => body += chunk);
       res.on('end', () => {
         if (res.statusCode !== 200) {
-          reject(new Error(`Claude API error: ${res.statusCode} - ${body}`));
+          reject(new Error(`Claude API error: ${res.statusCode}`));
           return;
         }
         
@@ -58,141 +54,134 @@ async function callClaude(prompt, model = "claude-haiku-4-5-20251001") {
 }
 
 async function generateCV(jobData, profileData, matchedSkills) {
-  // NO CONSOLE LOGS
+  const simplifiedProfile = simplifyProfile(profileData, jobData);
+  const shortDescription = (jobData.description || '').slice(0, 1200);
   
-  try {
-    const simplifiedProfile = simplifyProfile(profileData, jobData);
-    const shortDescription = (jobData.description || '').slice(0, 1200);
-    
-    const prompt = `You are a professional CV writer. Create a tailored CV for this job application.
+  const prompt = `Create ATS-friendly CV in HTML. CRITICAL: Simple, clean HTML - NO shadows, NO fancy CSS, black text on white.
 
-JOB POSTING:
-Title: ${jobData.title}
-Company: ${jobData.company}
-Location: ${jobData.location || 'Not specified'}
-Description: ${shortDescription}
+JOB: ${jobData.title} at ${jobData.company}
+DESCRIPTION: ${shortDescription}
+CANDIDATE: ${JSON.stringify(simplifiedProfile, null, 2)}
+MATCHED SKILLS: ${matchedSkills.slice(0, 5).join(', ')}
 
-CANDIDATE PROFILE:
-${JSON.stringify(simplifiedProfile, null, 2)}
+Use this EXACT template - clean and ATS-optimized:
 
-MATCHED SKILLS:
-${JSON.stringify(matchedSkills, null, 2)}
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { 
+  font-family: Arial, sans-serif; 
+  font-size: 10pt; 
+  line-height: 1.4; 
+  color: #000;
+  background: #fff;
+  padding: 0.5in;
+  max-width: 100%;
+}
+h1 { font-size: 16pt; margin-bottom: 4pt; font-weight: bold; }
+h2 { 
+  font-size: 12pt; 
+  margin-top: 12pt; 
+  margin-bottom: 6pt; 
+  border-bottom: 1px solid #000;
+  font-weight: bold;
+}
+.contact { font-size: 9pt; margin-bottom: 12pt; }
+.section { margin-bottom: 10pt; page-break-inside: avoid; }
+.job-title { font-weight: bold; margin-top: 6pt; }
+.job-company { font-style: italic; }
+.job-dates { font-size: 9pt; color: #333; }
+ul { margin: 4pt 0 4pt 20pt; }
+li { margin: 2pt 0; }
+</style>
+</head>
+<body>
+<h1>[FULL NAME]</h1>
+<div class="contact">[City, Country] | [Email] | [Phone]</div>
 
-INSTRUCTIONS:
-1. Use ONLY information from the profile provided - DO NOT invent experience
-2. Highlight the ${matchedSkills.slice(0, 5).join(', ')} skills prominently
-3. Reorder work experience to show most relevant roles first
-4. Keep bullet points concise and impact-focused
-5. Total length: 1 page equivalent (500-600 words)
+<h2>PROFESSIONAL SUMMARY</h2>
+<div class="section">[2-3 sentences highlighting matched skills and experience]</div>
 
-Format as clean markdown with sections:
-# [Name]
-[Headline]
+<h2>WORK EXPERIENCE</h2>
+[For each job - most relevant first]
+<div class="section">
+<div class="job-title">[Job Title]</div>
+<div class="job-company">[Company Name]</div>
+<div class="job-dates">[Dates]</div>
+<ul>
+<li>[Achievement focusing on matched skills]</li>
+<li>[Achievement with metrics]</li>
+</ul>
+</div>
 
-## Professional Summary
-[2-3 sentences highlighting relevant experience]
+<h2>SKILLS</h2>
+<div class="section">[Matched skills first, then others]</div>
 
-## Work Experience
-[Most relevant roles first, 3-5 bullets each]
+<h2>EDUCATION</h2>
+<div class="section">
+<div class="job-title">[Degree]</div>
+<div class="job-company">[Institution]</div>
+<div class="job-dates">[Year]</div>
+</div>
 
-## Skills
-[Grouped by category]
+</body>
+</html>
 
-## Education
-[Highest degree first]
+Return ONLY HTML - no markdown backticks.`;
 
-Return ONLY the markdown CV, no preamble or explanation.`;
-
-    const cv = await callClaude(prompt);
-    return cv;
-    
-  } catch (error) {
-    throw error;
-  }
+  let cv = await callClaude(prompt);
+  cv = cv.replace(/```html\n?/g, '').replace(/```\n?/g, '').trim();
+  return cv;
 }
 
 async function generateCoverLetter(jobData, profileData, matchedSkills) {
-  // NO CONSOLE LOGS
+  const simplifiedProfile = simplifyProfile(profileData, jobData);
   
-  try {
-    const simplifiedProfile = simplifyProfile(profileData, jobData);
-    const shortDescription = (jobData.description || '').slice(0, 1200);
-    
-    const prompt = `Write a professional cover letter for this job application.
+  const prompt = `Write professional cover letter. Plain text, 3 paragraphs, 250-300 words.
 
-JOB:
-Title: ${jobData.title}
-Company: ${jobData.company}
-Description: ${shortDescription}
+JOB: ${jobData.title} at ${jobData.company}
+CANDIDATE: ${profileData.full_name}
+MATCHED SKILLS: ${matchedSkills.slice(0, 5).join(', ')}
 
-CANDIDATE:
-${JSON.stringify(simplifiedProfile, null, 2)}
+Format:
+${profileData.full_name}
+${profileData.email} | ${profileData.phone || ''}
+${profileData.location}
 
-KEY MATCHED SKILLS: ${matchedSkills.slice(0, 5).join(', ')}
+[Date]
 
-INSTRUCTIONS:
-1. 3 paragraphs maximum (250-300 words total)
-2. Opening: Why you're interested in this specific role/company
-3. Body: 2-3 most relevant achievements that match job requirements
-4. Closing: Enthusiasm and call to action
-5. Professional but conversational tone
-6. NO generic fluff - be specific about the match
+Dear Hiring Manager,
 
-Format as plain text letter with proper spacing.
-Include: [Your Name], [Email], [Phone] at top.
+[Paragraph 1: Interest in role]
+[Paragraph 2: 2-3 relevant achievements]
+[Paragraph 3: Call to action]
 
-Return ONLY the letter text, no preamble.`;
+Best regards,
+${profileData.full_name}
 
-    const letter = await callClaude(prompt);
-    return letter;
-    
-  } catch (error) {
-    throw error;
-  }
+Plain text only.`;
+
+  const letter = await callClaude(prompt);
+  return letter.trim();
 }
 
-// Main execution
-if (require.main === module) {
-  const args = process.argv.slice(2);
-  
-  if (args.length < 4) {
-    console.error('Usage: node generate-cv.js <type> <job-json> <profile-json> <matched-skills-json>');
-    console.error('  type: "cv" or "letter"');
-    process.exit(1);
-  }
-  
-  const [type, jobJson, profileJson, matchedSkillsJson] = args;
-  
-  try {
-    const jobData = JSON.parse(jobJson);
-    const profileData = JSON.parse(profileJson);
-    const matchedSkills = JSON.parse(matchedSkillsJson);
-    
-    if (type === 'cv') {
-      generateCV(jobData, profileData, matchedSkills)
-        .then(cv => {
-          console.log('--- CV START ---');
-          console.log(cv);
-          console.log('--- CV END ---');
-          process.exit(0);
-        });
-    } else if (type === 'letter') {
-      generateCoverLetter(jobData, profileData, matchedSkills)
-        .then(letter => {
-          console.log('--- COVER LETTER START ---');
-          console.log(letter);
-          console.log('--- COVER LETTER END ---');
-          process.exit(0);
-        });
-    } else {
-      console.error('Type must be "cv" or "letter"');
-      process.exit(1);
-    }
-    
-  } catch (error) {
-    console.error('Error:', error.message);
-    process.exit(1);
-  }
+async function htmlToPdf(html, outputPath) {
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  });
+  const page = await browser.newPage();
+  await page.setContent(html, { waitUntil: 'networkidle0' });
+  await page.pdf({
+    path: outputPath,
+    format: 'Letter',
+    printBackground: false,
+    margin: { top: '0.5in', right: '0.5in', bottom: '0.5in', left: '0.5in' }
+  });
+  await browser.close();
 }
 
-module.exports = { generateCV, generateCoverLetter };
+module.exports = { generateCV, generateCoverLetter, htmlToPdf };

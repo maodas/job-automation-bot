@@ -1,61 +1,48 @@
 #!/usr/bin/env node
-
 const { scoreJob } = require('./score-job.js');
-const { generateCV, generateCoverLetter } = require('./generate-cv.js');
+const { generateCV, generateCoverLetter, htmlToPdf } = require('./generate-cv.js');
 const { getProfile, updateJobScore } = require('./db-helpers.js');
 const fs = require('fs');
 const path = require('path');
 
+function sanitizeFilename(str) {
+  return str.replace(/[^a-z0-9]/gi, '_').replace(/_+/g, '_');
+}
+
 async function processJob(jobData) {
-  console.error(`\n🎯 Processing: ${jobData.title} @ ${jobData.company}`);
-  console.error('━'.repeat(60));
-  
-  // Get profile
   const profile = await getProfile();
-  if (!profile) {
-    throw new Error('No profile found in database');
-  }
+  if (!profile) throw new Error('No profile found');
   
-  // Score job
-  console.error('\n1️⃣  Scoring job...');
   const scoreResult = await scoreJob(jobData, profile);
-  console.error(`   Score: ${scoreResult.score}/100`);
-  console.error(`   Reasoning: ${scoreResult.reasoning.substring(0, 100)}...`);
-  
-  // Update database
-  console.error('\n2️⃣  Updating database...');
   await updateJobScore(jobData.id, scoreResult);
   
   let cvPath = null;
   let letterPath = null;
   
-  // Generate documents if score is high enough
   if (scoreResult.score >= 75) {
-    console.error(`\n3️⃣  High score! Generating documents...`);
-    
-    // Create storage directory
     const jobDir = path.join(process.env.HOME, 'storage', 'jobs', `job_${jobData.id}`);
     if (!fs.existsSync(jobDir)) {
       fs.mkdirSync(jobDir, { recursive: true });
     }
     
-    // Generate CV
-    const cv = await generateCV(jobData, profile, scoreResult.matched_skills || []);
-    cvPath = path.join(jobDir, 'cv_tailored.md');
-    fs.writeFileSync(cvPath, cv);
-    console.error(`   ✅ CV saved: ${cvPath}`);
+    // Create proper filename: Marcos_Rodas_Product_Manager_CV.pdf
+    const name = profile.full_name.replace(/\s+/g, '_');
+    const jobTitle = sanitizeFilename(jobData.title.slice(0, 40));
     
-    // Generate cover letter
+    // Generate CV as PDF
+    const cvHtml = await generateCV(jobData, profile, scoreResult.matched_skills || []);
+    cvPath = path.join(jobDir, `${name}_${jobTitle}_CV.pdf`);
+    await htmlToPdf(cvHtml, cvPath);
+    
+    // Generate Cover Letter as PDF
     const letter = await generateCoverLetter(jobData, profile, scoreResult.matched_skills || []);
-    letterPath = path.join(jobDir, 'cover_letter.md');
-    fs.writeFileSync(letterPath, letter);
-    console.error(`   ✅ Cover letter saved: ${letterPath}`);
-    
-  } else {
-    console.error(`\n3️⃣  Score below threshold (75), skipping document generation`);
+    const letterHtml = `<!DOCTYPE html>
+<html><head><style>
+body { font-family: Arial, sans-serif; font-size: 11pt; line-height: 1.6; margin: 40px; white-space: pre-wrap; }
+</style></head><body>${letter}</body></html>`;
+    letterPath = path.join(jobDir, `${name}_${jobTitle}_CoverLetter.pdf`);
+    await htmlToPdf(letterHtml, letterPath);
   }
-  
-  console.error('\n✅ Job processing complete!\n');
   
   return {
     job_id: jobData.id,
@@ -69,12 +56,6 @@ async function processJob(jobData) {
 
 if (require.main === module) {
   const jobJson = process.argv[2];
-  
-  if (!jobJson) {
-    console.error('Usage: node process-job.js <job-json>');
-    process.exit(1);
-  }
-  
   const jobData = JSON.parse(jobJson);
   
   processJob(jobData)
@@ -83,7 +64,7 @@ if (require.main === module) {
       process.exit(0);
     })
     .catch(error => {
-      console.error('❌ Error:', error.message);
+      console.error('Error:', error.message);
       process.exit(1);
     });
 }

@@ -1,34 +1,21 @@
-# Node
-node_modules/
-package-lock.json
-
-# Environment
-.env
-.env.local
+# Credentials and secrets
+credentials/
+*.json
+token.json
+google-credentials.json
 
 # Logs
+logs/
 *.log
-npm-debug.log*
 
-# OS
-.DS_Store
-Thumbs.db
+# Notifications queue
+notifications/
 
-# Credentials
-*.key
-*.pem
-credentials.json
-*-credentials.json
+# Node modules
+node_modules/
 
-# Storage (don't commit user data)
-storage/
-*.pdf
-*.docx
+# Environment variables
+.env
 
-# Database dumps
-*.sql
-dumps/
-
-# Test files
-test-*.js
-*.backup
+# Storage (PDFs, etc)
+/home/marcos/storage/

@@ -10,7 +10,9 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "googleapis": "^172.0.0",
     "pg": "^8.21.0",
-    "playwright": "^1.60.0"
+    "playwright": "^1.60.0",
+    "puppeteer": "^24.43.1"
   }
 }
