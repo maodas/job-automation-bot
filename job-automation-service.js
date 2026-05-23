@@ -1,17 +1,22 @@
 #!/usr/bin/env node
 const { execSync } = require('child_process');
 
-function runProcessing() {
-  try {
-    console.log(new Date().toISOString(), 'Processing jobs...');
-    execSync('node process-jobs.js', { stdio: 'inherit' });
-    console.log('Syncing Google Sheets...');
-    execSync('node google-sheets-sync.js sync', { stdio: 'inherit' });
-    console.log('Sending notifications...');
-    execSync('node send-notifications.js', { stdio: 'inherit' });
-  } catch(e) { console.error(e.message); }
-}
+console.log('[' + new Date().toISOString() + '] Starting scheduled job processing...');
 
-console.log('Service started - every 5 min');
-runProcessing();
-setInterval(runProcessing, 300000);
+try {
+  // Process all jobs
+  console.log('Processing jobs...');
+  execSync('node process-jobs.js', { stdio: 'inherit' });
+  
+  // Sync to Google Sheets
+  console.log('Syncing Google Sheets...');
+  execSync('node google-sheets-sync.js sync', { stdio: 'inherit' });
+  
+  // Send notifications
+  console.log('Sending notifications...');
+  execSync('node send-notifications.js', { stdio: 'inherit' });
+  
+  console.log('[' + new Date().toISOString() + '] ✅ Completed successfully');
+} catch(e) {
+  console.error('[' + new Date().toISOString() + '] ❌ Error:', e.message);
+}

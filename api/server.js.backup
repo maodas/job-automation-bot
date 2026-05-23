@@ -1,0 +1,118 @@
+const express = require('express');
+const bodyParser = require('body-parser');
+const cors = require('cors');
+const { exec } = require('child_process');
+const util = require('util');
+const execPromise = util.promisify(exec);
+
+const app = express();
+const PORT = 3001;
+
+app.use(bodyParser.json({ limit: '10mb' }));
+app.use(cors());
+
+// Health check
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', service: 'job-automation-api' });
+});
+
+// Parse email to extract jobs
+app.post('/api/parse-email', async (req, res) => {
+  try {
+    const { emailBody } = req.body;
+    
+    if (!emailBody) {
+      return res.status(400).json({ error: 'emailBody is required' });
+    }
+
+    // Escape for shell
+    const escapedBody = emailBody.replace(/'/g, "'\\''");
+    
+    // Execute parser
+    const { stdout, stderr } = await execPromise(
+      `/home/marcos/job-bot/parse-email-jobs.sh '${escapedBody}'`,
+      { timeout: 30000 }
+    );
+
+    // Parse response
+    let cleaned = stdout.trim();
+    const parsed = JSON.parse(cleaned);
+    let jobs = parsed.jobs || parsed;
+    
+    if (!Array.isArray(jobs)) {
+      jobs = [jobs];
+    }
+
+    res.json({ 
+      success: true, 
+      jobs,
+      count: jobs.length 
+    });
+
+  } catch (error) {
+    console.error('Parse error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// Fetch LinkedIn job details
+app.post('/api/fetch-job', async (req, res) => {
+  try {
+    const { url } = req.body;
+    
+    if (!url) {
+      return res.status(400).json({ error: 'url is required' });
+    }
+
+    const { stdout } = await execPromise(
+      `node /home/marcos/job-bot/fetch-linkedin-job.js "${url}"`,
+      { timeout: 30000 }
+    );
+
+    const result = JSON.parse(stdout);
+    res.json(result);
+
+  } catch (error) {
+    console.error('Fetch error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// Score job match
+app.post('/api/score-job', async (req, res) => {
+  try {
+    const { job, profile } = req.body;
+    
+    if (!job || !profile) {
+      return res.status(400).json({ error: 'job and profile are required' });
+    }
+
+    const jobJson = JSON.stringify(job).replace(/'/g, "'\\''");
+    const profileJson = JSON.stringify(profile).replace(/'/g, "'\\''");
+
+    const { stdout } = await execPromise(
+      `/home/marcos/job-bot/score-job.sh '${jobJson}' '${profileJson}'`,
+      { timeout: 60000 }
+    );
+
+    const result = JSON.parse(stdout.trim());
+    res.json({ success: true, ...result });
+
+  } catch (error) {
+    console.error('Score error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+app.listen(PORT, () => {
+  console.log(`Job Automation API running on port ${PORT}`);
+});

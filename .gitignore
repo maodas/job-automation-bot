@@ -19,3 +19,6 @@ node_modules/
 
 # Storage (PDFs, etc)
 /home/marcos/storage/
+
+# Telegram credentials
+test-telegram-send.js
