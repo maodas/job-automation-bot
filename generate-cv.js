@@ -3,7 +3,7 @@ const https = require('https');
 const { simplifyProfile } = require('./simplify-profile.js');
 const puppeteer = require('puppeteer');
 
-async function callClaude(prompt, model = "claude-haiku-4-5-20251001") {
+async function callClaude(prompt, model = "claude-haiku-4-5-20251001", temperature = 0.6) {
   return new Promise((resolve, reject) => {
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
@@ -14,6 +14,7 @@ async function callClaude(prompt, model = "claude-haiku-4-5-20251001") {
     const data = JSON.stringify({
       model: model,
       max_tokens: 4000,
+      temperature: temperature,
       messages: [{role: "user", content: prompt}]
     });
 
@@ -55,116 +56,139 @@ async function callClaude(prompt, model = "claude-haiku-4-5-20251001") {
 
 async function generateCV(jobData, profileData, matchedSkills) {
   const simplifiedProfile = simplifyProfile(profileData, jobData);
-  const shortDescription = (jobData.description || '').slice(0, 1200);
+  const shortDescription = (jobData.description || '').slice(0, 1500);
   
-  const prompt = `Create ATS-friendly CV in HTML. CRITICAL: Simple, clean HTML - NO shadows, NO fancy CSS, black text on white.
+  const certs = profileData.certifications || [];
+  const alwaysInclude = certs.filter(c => c.always_include);
+  const contextual = certs.filter(c => !c.always_include);
+  
+  const prompt = `Create professional ATS-optimized CV.
+
+MANDATORY CERTS: ${alwaysInclude.map(c => `${c.name} (${c.issuer}, ${c.year})`).join(', ')}
+OPTIONAL CERTS: ${contextual.map(c => `${c.name} (${c.issuer})`).join(', ')}
 
 JOB: ${jobData.title} at ${jobData.company}
-DESCRIPTION: ${shortDescription}
-CANDIDATE: ${JSON.stringify(simplifiedProfile, null, 2)}
-MATCHED SKILLS: ${matchedSkills.slice(0, 5).join(', ')}
+DESC: ${shortDescription}
 
-Use this EXACT template - clean and ATS-optimized:
+PROFILE: Marcos Rodas, 5+ years AI automation, maodas00@gmail.com, +502 40154866
+SKILLS: ${matchedSkills.join(', ')}
 
+HTML TEMPLATE - COPY EXACTLY:
 <!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body { 
-  font-family: Arial, sans-serif; 
-  font-size: 10pt; 
-  line-height: 1.4; 
-  color: #000;
-  background: #fff;
-  padding: 0.5in;
-  max-width: 100%;
-}
-h1 { font-size: 16pt; margin-bottom: 4pt; font-weight: bold; }
-h2 { 
-  font-size: 12pt; 
-  margin-top: 12pt; 
-  margin-bottom: 6pt; 
-  border-bottom: 1px solid #000;
-  font-weight: bold;
-}
-.contact { font-size: 9pt; margin-bottom: 12pt; }
-.section { margin-bottom: 10pt; page-break-inside: avoid; }
-.job-title { font-weight: bold; margin-top: 6pt; }
-.job-company { font-style: italic; }
-.job-dates { font-size: 9pt; color: #333; }
-ul { margin: 4pt 0 4pt 20pt; }
-li { margin: 2pt 0; }
-</style>
-</head>
-<body>
-<h1>[FULL NAME]</h1>
-<div class="contact">[City, Country] | [Email] | [Phone]</div>
+<html><head><meta charset="UTF-8"><style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:Arial,sans-serif;font-size:10.5pt;line-height:1.4;color:#000;padding:0.4in 0.6in}
+h1{font-size:20pt;font-weight:bold;text-align:center;margin-bottom:4pt}
+.tag{font-size:11.5pt;text-align:center;font-style:italic;margin-bottom:6pt;color:#333}
+.contact{font-size:9.5pt;text-align:center;margin-bottom:14pt;color:#444}
+h2{font-size:11.5pt;font-weight:bold;text-transform:uppercase;margin-top:14pt;margin-bottom:6pt;border-bottom:2pt solid #000;padding-bottom:2pt}
+.job{margin-top:8pt}
+.jt{font-weight:bold;float:left}
+.jd{float:right;font-size:9.5pt;color:#555}
+.jc{clear:both;font-style:italic;font-size:10pt;margin-bottom:4pt}
+ul{margin:4pt 0 8pt 18pt}
+li{margin:3pt 0}
+.cert{margin:3pt 0 3pt 18pt;position:relative}
+.cert:before{content:"•";position:absolute;left:-18pt}
+.sk{margin:4pt 0}
+.skl{font-weight:bold}
+</style></head><body>
+
+<h1>MARCOS RODAS</h1>
+<div class="tag">[Job-specific title - e.g. "Technical Product Manager — AI & Automation"]</div>
+<div class="contact">Guatemala City  |  +502 40154866  |  maodas00@gmail.com  |  maodas.online  |  linkedin.com/in/marcos-rodas</div>
 
 <h2>PROFESSIONAL SUMMARY</h2>
-<div class="section">[2-3 sentences highlighting matched skills and experience]</div>
+<p>[3-4 sentences, use job keywords, 5+ years, mention certs]</p>
 
-<h2>WORK EXPERIENCE</h2>
-[For each job - most relevant first]
-<div class="section">
-<div class="job-title">[Job Title]</div>
-<div class="job-company">[Company Name]</div>
-<div class="job-dates">[Dates]</div>
-<ul>
-<li>[Achievement focusing on matched skills]</li>
-<li>[Achievement with metrics]</li>
-</ul>
+<h2>CORE COMPETENCIES</h2>
+<p>[Matched skills first • separated • by bullets]</p>
+
+<h2>PROFESSIONAL EXPERIENCE</h2>
+
+<div class="job">
+<div class="jt">Project Coordinator — Digital Platforms</div>
+<div class="jd">Jul 2024 – Present</div>
+<div class="jc">IOM (International Organization for Migration) — ROOTS Program</div>
+<ul><li>[Adapted bullet]</li><li>[Adapted bullet]</li><li>[Adapted bullet]</li></ul>
 </div>
 
-<h2>SKILLS</h2>
-<div class="section">[Matched skills first, then others]</div>
+<div class="job">
+<div class="jt">Automation & AI Solutions Specialist</div>
+<div class="jd">2022 – 2024</div>
+<div class="jc">IOM — ROOTS Program</div>
+<ul><li>[Bullet]</li><li>[Bullet]</li></ul>
+</div>
+
+<div class="job">
+<div class="jt">Operations Manager</div>
+<div class="jd">Feb 2012 – Aug 2023</div>
+<div class="jc">IDC Los Tres, S.A.</div>
+<ul><li>[Bullet]</li><li>[Bullet]</li></ul>
+</div>
+
+<h2>CERTIFICATIONS</h2>
+<div class="cert">Google Project Management Certificate — Google/Coursera (2023)</div>
+<div class="cert">AI Fluency Framework & Foundations — Anthropic (2026)</div>
+[Add relevant optional certs]
+
+<h2>TECHNICAL SKILLS</h2>
+<div class="sk"><span class="skl">Languages:</span> JavaScript, TypeScript, Python, SQL</div>
+<div class="sk"><span class="skl">AI & Automation:</span> [List]</div>
+<div class="sk"><span class="skl">Cloud:</span> [List]</div>
 
 <h2>EDUCATION</h2>
-<div class="section">
-<div class="job-title">[Degree]</div>
-<div class="job-company">[Institution]</div>
-<div class="job-dates">[Year]</div>
-</div>
+<div class="cert">Associate Degree in Software Development — Universidad Galileo (2023)</div>
+<div class="cert">B.S. in Administrative Engineering — Universidad Galileo (In Progress)</div>
 
-</body>
-</html>
+</body></html>
 
-Return ONLY HTML - no markdown backticks.`;
+Return HTML only, no backticks.`;
 
-  let cv = await callClaude(prompt);
+  let cv = await callClaude(prompt, "claude-haiku-4-5-20251001", 0.6);
   cv = cv.replace(/```html\n?/g, '').replace(/```\n?/g, '').trim();
   return cv;
 }
 
 async function generateCoverLetter(jobData, profileData, matchedSkills) {
-  const simplifiedProfile = simplifyProfile(profileData, jobData);
+  const certs = profileData.certifications || [];
+  const alwaysInclude = certs.filter(c => c.always_include);
   
-  const prompt = `Write professional cover letter. Plain text, 3 paragraphs, 250-300 words.
+  const prompt = `Write EXCEPTIONAL cover letter - specific, compelling, authentic.
 
 JOB: ${jobData.title} at ${jobData.company}
-CANDIDATE: ${profileData.full_name}
-MATCHED SKILLS: ${matchedSkills.slice(0, 5).join(', ')}
+DESC: ${(jobData.description || "").slice(0, 900)}
 
-Format:
-${profileData.full_name}
-${profileData.email} | ${profileData.phone || ''}
-${profileData.location}
+PERSON: 5+ yrs AI automation, n8n expert, ${alwaysInclude.map(c => c.name).join(", ")}
+SKILLS: ${matchedSkills.slice(0, 6).join(", ")}
 
-[Date]
+RULES:
+- NO "I am writing to express"
+- Start with something specific about THEIR company/product
+- Tell ONE specific story with metrics
+- Show genuine enthusiasm
+- 300-350 words, 3-4 paras
+
+EXACT FORMAT:
+                                                                Guatemala City
 
 Dear Hiring Manager,
 
-[Paragraph 1: Interest in role]
-[Paragraph 2: 2-3 relevant achievements]
-[Paragraph 3: Call to action]
+[Hook paragraph - specific to their company/product]
+
+[Story paragraph - concrete example with metrics from your work]
+
+[Fit paragraph - why you are uniquely positioned for THIS role]
+
+[Close - brief and confident]
 
 Best regards,
-${profileData.full_name}
+Marcos Rodas
+maodas00@gmail.com | +502 40154866 | maodas.online | linkedin.com/in/marcos-rodas
 
-Plain text only.`;
+CRITICAL: Location "Guatemala City" goes TOP RIGHT. Contact info goes BOTTOM after signature.`;
 
-  const letter = await callClaude(prompt);
+  const letter = await callClaude(prompt, "claude-haiku-4-5-20251001", 0.7);
   return letter.trim();
 }
 
@@ -179,7 +203,7 @@ async function htmlToPdf(html, outputPath) {
     path: outputPath,
     format: 'Letter',
     printBackground: false,
-    margin: { top: '0.5in', right: '0.5in', bottom: '0.5in', left: '0.5in' }
+    margin: { top: '0.4in', right: '0.6in', bottom: '0.4in', left: '0.6in' }
   });
   await browser.close();
 }
