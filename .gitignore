@@ -1,24 +1,16 @@
-# Credentials and secrets
 credentials/
 *.json
+!package.json
 token.json
-google-credentials.json
-
-# Logs
-logs/
-*.log
-
-# Notifications queue
-notifications/
-
-# Node modules
-node_modules/
-
-# Environment variables
 .env
+.env.*
+logs/
+node_modules/
+storage/
+notifications/
+.DS_Store
+*.swp
 
-# Storage (PDFs, etc)
-/home/marcos/storage/
-
-# Telegram credentials
-test-telegram-send.js
+# Test files with potential secrets
+test-*.js
+get-*-token.js
