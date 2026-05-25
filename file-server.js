@@ -10,8 +10,11 @@ const server = http.createServer((req, res) => {
   res.setTimeout(30000);
   res.setHeader('Access-Control-Allow-Origin', '*');
   
-  // Match /jobs/job_X/cv.pdf or /jobs/job_X/cover_letter.pdf
-  const match = req.url.match(/\/jobs\/(job_[^\/]+)\/(cv|cover_letter)\.pdf/);
+  // Decode the URL first!
+  const decodedUrl = decodeURIComponent(req.url);
+  
+  // Match /jobs/job_X/any-filename.pdf
+  const match = decodedUrl.match(/\/jobs\/(job_[^\/]+)\/(.+\.pdf)/);
   
   if (!match) {
     res.writeHead(200, {'Content-Type': 'text/html'});
@@ -19,11 +22,11 @@ const server = http.createServer((req, res) => {
     return;
   }
   
-  const [, jobFolder, fileType] = match;
-  const filePath = path.join(STORAGE_DIR, jobFolder, `${fileType}.pdf`);
+  const [, jobFolder, filename] = match;
+  const filePath = path.join(STORAGE_DIR, jobFolder, filename);
   
   if (!fs.existsSync(filePath)) {
-    res.writeHead(404);
+    res.writeHead(404, {'Content-Type': 'text/plain'});
     res.end('File not found: ' + filePath);
     return;
   }
@@ -32,7 +35,7 @@ const server = http.createServer((req, res) => {
   res.writeHead(200, {
     'Content-Type': 'application/pdf',
     'Content-Length': stat.size,
-    'Content-Disposition': `attachment; filename="${fileType}.pdf"`
+    'Content-Disposition': `attachment; filename="${filename}"`
   });
   
   const fileStream = fs.createReadStream(filePath);

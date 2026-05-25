@@ -34,8 +34,13 @@ async function sync() {
     let letterLink = '';
     
     if (parseInt(score) >= 70) {
-      cvLink = `=HYPERLINK("http://${serverIp}:8080/jobs/job_${id}/cv.pdf","Download CV")`;
-      letterLink = `=HYPERLINK("http://${serverIp}:8080/jobs/job_${id}/cover_letter.pdf","Download Letter")`;
+      // Sanitize title in JavaScript, then build the URL
+      const sanitizedTitle = title.replace(/[^a-zA-Z0-9 ]/g, '').substring(0, 50);
+      const cvUrl = `http://${serverIp}:8080/jobs/job_${id}/Marcos%20Rodas%20CV%20-%20${encodeURIComponent(sanitizedTitle)}.pdf`;
+      const letterUrl = `http://${serverIp}:8080/jobs/job_${id}/Marcos%20Rodas%20Cover%20Letter%20-%20${encodeURIComponent(sanitizedTitle)}.pdf`;
+      
+      cvLink = `=HYPERLINK("${cvUrl}","Download CV")`;
+      letterLink = `=HYPERLINK("${letterUrl}","Download Letter")`;
     }
     
     rows.push([id,title,company,location,score,status,url,cvLink,letterLink,date]);

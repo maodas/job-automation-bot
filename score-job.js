@@ -1,28 +1,25 @@
-require('dotenv').config({path: '/home/marcos/job-bot/.env'});
+require('dotenv').config({ path: '/home/marcos/job-bot/.env' });
 const https = require('https');
 
-function truncateText(text, maxLength = 3000) {
-  if (!text) return '';
-  return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+function truncateText(text, maxLength = 2000) {
+  if (!text || text.length <= maxLength) return text;
+  return text.substring(0, maxLength) + '...';
 }
 
 function simplifyProfile(profile) {
   return {
-    name: profile.full_name,
-    headline: profile.headline,
-    summary: truncateText(profile.summary, 500),
+    roles: profile.target_roles,
     skills: profile.technical_skills,
-    target_roles: profile.target_roles,
-    // Take only top 3 most recent experiences
     experience: Array.isArray(profile.work_experience) 
       ? profile.work_experience.slice(0, 3)
       : profile.work_experience
   };
 }
 
-async function scoreJob(jobDescription, profile) {
+async function scoreJob(job, profile) {
   const simplifiedProfile = simplifyProfile(profile);
-  const truncatedDescription = truncateText(jobDescription, 2000);
+  const jobDesc = `${job.title} at ${job.company}\n${job.description || 'No description'}`;
+  const truncatedDescription = truncateText(jobDesc, 2000);
   
   const prompt = `Score this job from 0-100 based on candidate fit.
 
@@ -32,7 +29,7 @@ ${JSON.stringify(simplifiedProfile, null, 2)}
 JOB:
 ${truncatedDescription}
 
-Return ONLY valid JSON:
+Return ONLY valid JSON (no markdown, no explanation):
 {
   "score": 85,
   "reasoning": "Brief explanation",
@@ -85,7 +82,6 @@ Return ONLY valid JSON:
         }
       });
     });
-
     req.on('error', reject);
     req.write(data);
     req.end();
