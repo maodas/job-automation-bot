@@ -3,7 +3,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-const PORT = 3030;
+const PORT = 8080;
 const STORAGE_DIR = '/home/marcos/storage/jobs';
 
 const server = http.createServer((req, res) => {
@@ -15,7 +15,7 @@ const server = http.createServer((req, res) => {
   
   if (!match) {
     res.writeHead(200, {'Content-Type': 'text/html'});
-    res.end('<h1>Job Bot File Server - Running on port 3030</h1>');
+    res.end('<h1>Job Bot File Server - Running on port 8080</h1>');
     return;
   }
   

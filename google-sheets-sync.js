@@ -34,8 +34,8 @@ async function sync() {
     let letterLink = '';
     
     if (parseInt(score) >= 70) {
-      cvLink = `=HYPERLINK("http://${serverIp}:3030/jobs/job_${id}/cv.pdf","Download CV")`;
-      letterLink = `=HYPERLINK("http://${serverIp}:3030/jobs/job_${id}/cover_letter.pdf","Download Letter")`;
+      cvLink = `=HYPERLINK("http://${serverIp}:8080/jobs/job_${id}/cv.pdf","Download CV")`;
+      letterLink = `=HYPERLINK("http://${serverIp}:8080/jobs/job_${id}/cover_letter.pdf","Download Letter")`;
     }
     
     rows.push([id,title,company,location,score,status,url,cvLink,letterLink,date]);
