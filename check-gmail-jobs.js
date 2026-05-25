@@ -70,11 +70,43 @@ async function checkGmail() {
         }
       }
       
-      const urlMatches = body.matchAll(/https:\/\/www\.linkedin\.com\/comm\/jobs\/view\/(\d+)/g);
-      const jobUrls = [...new Set([...urlMatches].map(match => match[0]))];
+      // Extract ALL LinkedIn job view URLs
+      const urlMatches = body.matchAll(/https:\/\/www\.linkedin\.com\/comm\/jobs\/view\/(\d+)[^\s]*/g);
+      const allUrls = [...urlMatches].map(match => match[0]);
+      
+      // FILTER OUT junk URLs
+      const jobUrls = [...new Set(allUrls.filter(url => {
+        // Keep only if line context looks like a job posting
+        const lines = body.split('\n');
+        const urlLine = lines.find(line => line.includes(url));
+        if (!urlLine) return false;
+        
+        // Exclude footer/navigation links
+        const lowerLine = urlLine.toLowerCase();
+        if (lowerLine.includes('view job:')) return true; // Explicit job link
+        if (lowerLine.includes('see all jobs')) return false;
+        if (lowerLine.includes('unsubscribe')) return false;
+        if (lowerLine.includes('premium')) return false;
+        if (lowerLine.includes('manage')) return false;
+        if (lowerLine.includes('help')) return false;
+        if (lowerLine.includes('learn why')) return false;
+        if (lowerLine.includes('©')) return false;
+        if (lowerLine.includes('trademark')) return false;
+        if (lowerLine.includes('corporation')) return false;
+        
+        // If URL appears near a job title pattern, keep it
+        const lineIndex = lines.indexOf(urlLine);
+        for (let i = Math.max(0, lineIndex - 3); i < Math.min(lines.length, lineIndex + 2); i++) {
+          const contextLine = lines[i].toLowerCase();
+          if (contextLine.includes(' at ') && !contextLine.includes('email')) return true;
+          if (contextLine.match(/engineer|manager|developer|analyst|consultant|coordinator/)) return true;
+        }
+        
+        return false;
+      }))];
       
       if (jobUrls.length === 0) {
-        console.log(`   No job URLs\n`);
+        console.log(`   No valid job URLs found\n`);
         continue;
       }
       
@@ -94,7 +126,7 @@ async function checkGmail() {
         }
         
         let title = 'LinkedIn Job';
-        let company = 'See LinkedIn';
+        let company = 'Unknown Company';
         
         const urlLineIndex = lines.findIndex(line => line.includes(jobUrl));
         
@@ -106,7 +138,8 @@ async function checkGmail() {
                 line.includes('http') || 
                 line.includes('View job') ||
                 line.includes('Easy Apply') ||
-                line.includes('connections')) {
+                line.includes('connections') ||
+                line.includes('--------')) {
               continue;
             }
             
@@ -117,7 +150,7 @@ async function checkGmail() {
               break;
             }
             
-            if (!line.includes(',') && line.length < 80) {
+            if (!line.includes(',') && line.length < 80 && !line.includes('alum')) {
               title = line;
               if (i + 1 < lines.length) {
                 const nextLine = lines[i + 1];
@@ -160,7 +193,6 @@ async function checkGmail() {
     await pool.end();
     process.exit(1);
   } finally {
-    // CRITICAL: Always close the pool
     await pool.end();
   }
 }

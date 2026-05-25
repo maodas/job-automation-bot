@@ -1,41 +1,27 @@
 #!/usr/bin/env node
-
-const { exec } = require('child_process');
+const { execSync } = require('child_process');
 const { promisify } = require('util');
+const { exec } = require('child_process');
 const execAsync = promisify(exec);
 
 async function getUnscoredJobs() {
-  const { stdout } = await execAsync(`sudo -u postgres psql job_automation -t -A -F'|' -c "
-    SELECT row_to_json(t) FROM (
-      SELECT * FROM jobs 
-      WHERE status = 'new' 
-        AND fetch_status = 'success'
-      ORDER BY created_at DESC
-      LIMIT 20
-    ) t;
-  "`);
+  const { stdout } = await execAsync(`sudo -u postgres psql job_automation -t -A -F'|' -c "SELECT id,title,company,location,description,source_url FROM jobs WHERE status = 'new' ORDER BY created_at DESC"`);
   
-  const lines = stdout.trim().split('\n').filter(Boolean);
-  return lines.map(line => JSON.parse(line));
+  const lines = stdout.trim().split('\n').filter(line => line);
+  return lines.map(line => {
+    const [id, title, company, location, description, source_url] = line.split('|');
+    return { id, title, company, location, description, source_url };
+  });
 }
 
 async function getProfile() {
-  const { stdout } = await execAsync(`sudo -u postgres psql job_automation -t -A -c "
-    SELECT row_to_json(t) FROM (
-      SELECT * FROM profiles 
-      ORDER BY created_at DESC 
-      LIMIT 1
-    ) t;
-  "`);
-  
+  const { stdout } = await execAsync(`sudo -u postgres psql job_automation -t -A -c "SELECT row_to_json(profiles) FROM profiles LIMIT 1"`);
   return JSON.parse(stdout.trim());
 }
 
 async function updateJobScore(jobId, scoreResult) {
-  // Properly escape all strings for PostgreSQL
   const escapeForPsql = (str) => {
     if (!str) return '';
-    // Replace single quotes with double single quotes for SQL
     return str.replace(/'/g, "''").replace(/\\/g, '\\\\');
   };
   
@@ -44,7 +30,6 @@ async function updateJobScore(jobId, scoreResult) {
   const matchedSkills = JSON.stringify(scoreResult.matched_skills || []).replace(/'/g, "''");
   const missingSkills = JSON.stringify(scoreResult.missing_skills || []).replace(/'/g, "''");
   
-  // Use heredoc to avoid shell parsing issues
   const { stdout, stderr } = await execAsync(`sudo -u postgres psql job_automation << 'SQLEOF'
 UPDATE jobs 
 SET 
@@ -53,22 +38,20 @@ SET
   required_skills = '${requiredSkills}'::jsonb,
   matched_skills = '${matchedSkills}'::jsonb,
   missing_skills = '${missingSkills}'::jsonb,
-  status = 'scored',
-  updated_at = NOW()
+  status = 'scored'
 WHERE id = '${jobId}';
 SQLEOF
 `);
   
-  if (stderr && !stderr.includes('UPDATE')) {
+  if (stderr && !stderr.includes('UPDATE 1')) {
     throw new Error(stderr);
   }
 }
 
-// Main CLI
 async function main() {
-  const command = process.argv[2];
-  
   try {
+    const command = process.argv[2];
+    
     if (command === 'get-unscored') {
       const jobs = await getUnscoredJobs();
       console.log(JSON.stringify(jobs, null, 2));
@@ -79,8 +62,18 @@ async function main() {
       
     } else if (command === 'update-score') {
       const jobId = process.argv[3];
-      const scoreResult = JSON.parse(process.argv[4]);
-      await updateJobScore(jobId, scoreResult);
+      const score = parseInt(process.argv[4]);
+      const reasoning = process.argv[5];
+      const matchedSkills = JSON.parse(process.argv[6]);
+      const missingSkills = JSON.parse(process.argv[7]);
+      
+      await updateJobScore(jobId, {
+        score,
+        reasoning,
+        required_skills: [],
+        matched_skills: matchedSkills,
+        missing_skills: missingSkills
+      });
       console.log('✅ Score updated');
       
     } else {

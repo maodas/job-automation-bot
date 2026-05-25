@@ -1,12 +1,41 @@
 #!/usr/bin/env node
-const { scoreJob } = require('./score-job.js');
-const { generateCV, generateCoverLetter, htmlToPdf } = require('./generate-cv.js');
-const { getProfile, updateJobScore } = require('./db-helpers.js');
+const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const { generateCV, generateCoverLetter, htmlToPdf } = require('./generate-cv.js');
 
 function sanitizeFilename(str) {
-  return str.replace(/[^a-z0-9]/gi, '_').replace(/_+/g, '_');
+  return str.replace(/[^a-zA-Z0-9\s-]/g, '').replace(/\s+/g, '_');
+}
+
+async function getProfile() {
+  try {
+    const result = execSync('node db-helpers.js get-profile', { encoding: 'utf8' });
+    return JSON.parse(result);
+  } catch (e) {
+    return null;
+  }
+}
+
+async function scoreJob(jobData, profile) {
+  try {
+    // Write to temp file to avoid shell escaping issues
+    const tmpFile = '/tmp/score-input-' + Date.now() + '.json';
+    fs.writeFileSync(tmpFile, JSON.stringify({ jobData, profileData: profile }));
+    
+    const result = execSync(`cat ${tmpFile} | node score-job-wrapper.js`, { encoding: 'utf8' });
+    fs.unlinkSync(tmpFile);
+    
+    return JSON.parse(result);
+  } catch (e) {
+    return { score: 50, reasoning: 'Scoring failed', matched_skills: [], missing_skills: [] };
+  }
+}
+
+async function updateJobScore(jobId, scoreResult) {
+  const reasoningEscaped = (scoreResult.reasoning || '').replace(/'/g, "''");
+  const updateCmd = `node db-helpers.js update-score '${jobId}' '${scoreResult.score}' '${reasoningEscaped}' '${JSON.stringify(scoreResult.matched_skills)}' '${JSON.stringify(scoreResult.missing_skills)}'`;
+  execSync(updateCmd);
 }
 
 async function processJob(jobData) {
@@ -19,54 +48,47 @@ async function processJob(jobData) {
   let cvPath = null;
   let letterPath = null;
   
-  if (scoreResult.score >= 75) {
+  if (scoreResult.score >= 70) {
     const jobDir = path.join(process.env.HOME, 'storage', 'jobs', `job_${jobData.id}`);
     if (!fs.existsSync(jobDir)) {
       fs.mkdirSync(jobDir, { recursive: true });
     }
     
-    // Create proper filename: Marcos_Rodas_Product_Manager_CV.pdf
     const name = profile.full_name.replace(/\s+/g, '_');
     const jobTitle = sanitizeFilename(jobData.title.slice(0, 40));
     
     // Generate CV as PDF
-    const cvHtml = await generateCV(jobData, profile, scoreResult.matched_skills || []);
+    const cvHtml = await generateCV(jobData, profile, scoreResult.matched_skills);
     cvPath = path.join(jobDir, `${name}_${jobTitle}_CV.pdf`);
     await htmlToPdf(cvHtml, cvPath);
     
-    // Generate Cover Letter as PDF
-    const letter = await generateCoverLetter(jobData, profile, scoreResult.matched_skills || []);
-    const letterHtml = `<!DOCTYPE html>
-<html><head><style>
-body { font-family: Arial, sans-serif; font-size: 11pt; line-height: 1.6; margin: 40px; white-space: pre-wrap; }
-</style></head><body>${letter}</body></html>`;
+    // Generate cover letter as PDF
+    const letterText = await generateCoverLetter(jobData, profile, scoreResult.matched_skills);
     letterPath = path.join(jobDir, `${name}_${jobTitle}_CoverLetter.pdf`);
+    
+    const letterHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 8.5in; margin: 0 auto; padding: 0.5in; line-height: 1.6; color: #333; }
+    p { margin: 10px 0; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+${letterText.split('\n\n').map(para => `<p>${para}</p>`).join('\n')}
+</body>
+</html>`;
+    
     await htmlToPdf(letterHtml, letterPath);
   }
   
   return {
-    job_id: jobData.id,
-    title: jobData.title,
-    company: jobData.company,
     score: scoreResult.score,
     cv_path: cvPath,
     letter_path: letterPath
   };
-}
-
-if (require.main === module) {
-  const jobJson = process.argv[2];
-  const jobData = JSON.parse(jobJson);
-  
-  processJob(jobData)
-    .then(result => {
-      console.log(JSON.stringify(result, null, 2));
-      process.exit(0);
-    })
-    .catch(error => {
-      console.error('Error:', error.message);
-      process.exit(1);
-    });
 }
 
 module.exports = { processJob };
