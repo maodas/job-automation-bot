@@ -3,55 +3,42 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-const PORT = 8080;
+const PORT = 3030;
 const STORAGE_DIR = '/home/marcos/storage/jobs';
 
 const server = http.createServer((req, res) => {
-  res.setTimeout(30000); // 30 second timeout
+  res.setTimeout(30000);
   res.setHeader('Access-Control-Allow-Origin', '*');
   
-  const match = req.url.match(/\/download\/(job_[^\/]+)\/(cv|cover-letter)\.pdf/);
+  // Match /jobs/job_X/cv.pdf or /jobs/job_X/cover_letter.pdf
+  const match = req.url.match(/\/jobs\/(job_[^\/]+)\/(cv|cover_letter)\.pdf/);
   
   if (!match) {
     res.writeHead(200, {'Content-Type': 'text/html'});
-    res.end('<h1>Job Bot File Server - Running</h1>');
+    res.end('<h1>Job Bot File Server - Running on port 3030</h1>');
     return;
   }
   
   const [, jobFolder, fileType] = match;
-  const jobDir = path.join(STORAGE_DIR, jobFolder);
+  const filePath = path.join(STORAGE_DIR, jobFolder, `${fileType}.pdf`);
   
-  if (!fs.existsSync(jobDir)) {
+  if (!fs.existsSync(filePath)) {
     res.writeHead(404);
-    res.end('Job folder not found');
+    res.end('File not found: ' + filePath);
     return;
   }
-  
-  const files = fs.readdirSync(jobDir);
-  const pattern = fileType === 'cv' ? /_CV\.pdf$/ : /_CoverLetter\.pdf$/;
-  const actualFile = files.find(f => pattern.test(f));
-  
-  if (!actualFile) {
-    res.writeHead(404);
-    res.end('File not found in folder');
-    return;
-  }
-  
-  const filePath = path.join(jobDir, actualFile);
   
   const stat = fs.statSync(filePath);
   res.writeHead(200, {
     'Content-Type': 'application/pdf',
     'Content-Length': stat.size,
-    'Content-Disposition': `attachment; filename="${actualFile}"`,
-    'Cache-Control': 'no-cache'
+    'Content-Disposition': `attachment; filename="${fileType}.pdf"`
   });
   
-  const stream = fs.createReadStream(filePath);
-  stream.pipe(res);
+  const fileStream = fs.createReadStream(filePath);
+  fileStream.pipe(res);
 });
 
-server.timeout = 30000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`File server running on port ${PORT}`);
 });

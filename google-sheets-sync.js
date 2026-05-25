@@ -29,9 +29,14 @@ async function sync() {
   result.split('\n').forEach(line => {
     const [id,title,company,location,score,status,url,date] = line.split('|');
     
-    // Use HYPERLINK formula for direct download
-    const cvLink = `=HYPERLINK("http://${serverIp}:8080/download/job_${id}/cv.pdf","Download CV")`;
-    const letterLink = `=HYPERLINK("http://${serverIp}:8080/download/job_${id}/cover-letter.pdf","Download Letter")`;
+    // Only add download links for high-scoring jobs (70+)
+    let cvLink = '';
+    let letterLink = '';
+    
+    if (parseInt(score) >= 70) {
+      cvLink = `=HYPERLINK("http://${serverIp}:3030/jobs/job_${id}/cv.pdf","Download CV")`;
+      letterLink = `=HYPERLINK("http://${serverIp}:3030/jobs/job_${id}/cover_letter.pdf","Download Letter")`;
+    }
     
     rows.push([id,title,company,location,score,status,url,cvLink,letterLink,date]);
   });
@@ -44,7 +49,7 @@ async function sync() {
     spreadsheetId, range: 'A1', valueInputOption: 'USER_ENTERED',
     resource: {values: rows}
   });
-  console.log('✅ Synced', rows.length-1, 'jobs with HYPERLINK formulas');
+  console.log('✅ Synced', rows.length-1, 'jobs with download links');
 }
 
 const cmd = process.argv[2];

@@ -10,6 +10,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "dotenv": "^17.4.2",
     "googleapis": "^172.0.0",
     "pg": "^8.21.0",
     "playwright": "^1.60.0",

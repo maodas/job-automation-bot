@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 const https = require('https');
-const { simplifyProfile } = require('./simplify-profile.js');
 const puppeteer = require('puppeteer');
 
 async function callClaude(prompt, model = "claude-haiku-4-5-20251001", temperature = 0.6) {
