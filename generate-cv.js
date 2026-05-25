@@ -55,138 +55,165 @@ async function callClaude(prompt, model = "claude-haiku-4-5-20251001", temperatu
 }
 
 async function generateCV(jobData, profileData, matchedSkills) {
-  const simplifiedProfile = simplifyProfile(profileData, jobData);
-  const shortDescription = (jobData.description || '').slice(0, 1500);
+  const jobPosition = jobData.title || 'Position';
+  const company = jobData.company || 'Company';
   
-  const certs = profileData.certifications || [];
-  const alwaysInclude = certs.filter(c => c.always_include);
-  const contextual = certs.filter(c => !c.always_include);
-  
-  const prompt = `Create professional ATS-optimized CV.
+  const prompt = `Create tailored CV HTML for: ${jobPosition} at ${company}
 
-MANDATORY CERTS: ${alwaysInclude.map(c => `${c.name} (${c.issuer}, ${c.year})`).join(', ')}
-OPTIONAL CERTS: ${contextual.map(c => `${c.name} (${c.issuer})`).join(', ')}
+CRITICAL: Use ONLY real information. DO NOT invent experience.
 
-JOB: ${jobData.title} at ${jobData.company}
-DESC: ${shortDescription}
+TARGET JOB: ${jobPosition} at ${company}
+JOB DESCRIPTION: ${(jobData.description || "").slice(0, 1200)}
 
-PROFILE: Marcos Rodas, 5+ years AI automation, maodas00@gmail.com, +502 40154866
-SKILLS: ${matchedSkills.join(', ')}
+REAL CANDIDATE INFORMATION:
 
-HTML TEMPLATE - COPY EXACTLY:
+NAME: Marcos Rodas
+CONTACT: maodas00@gmail.com | +502 40154866 | maodas.online | linkedin.com/in/marcos-rodas
+LOCATION: Guatemala City, Guatemala
+
+REAL WORK EXPERIENCE:
+
+1. Project Coordinator — Digital Platforms & AI Solutions (2022 – Present)
+   IOM (International Organization for Migration) — ROOTS/RRP Program (USAID / U.S. Dept. of State)
+   
+   CONTEXT: Reported directly TO USAID and U.S. Department of State while implementing FOR Guatemalan government institutions.
+   
+   Real achievements:
+   - Designed and implemented digital platforms for Guatemalan government agencies (MINTRAB, IGM)
+   - Built AI-powered automation workflows (Python, Node.js, OpenAI API, Claude API, n8n)
+   - Created REST API integrations connecting institutional systems
+   - Deployed solutions on GCP with Docker
+   - Translated technical requirements into strategic roadmaps
+   - Reported project progress to USAID and DoS stakeholders
+   
+   Create 4-5 XYZ bullets
+
+2. Operations Manager / Technical Lead (2012 – 2022)
+   IDC Los Tres
+   
+   Real achievements:
+   - Automated internal processes
+   - Built API integrations
+   - Created automated reporting
+   
+   Create 3-4 XYZ bullets
+
+REAL CERTIFICATIONS (First two always):
+- Google Project Management Certificate (2023)
+- AI Fluency Framework & Foundations — Anthropic (2026)
+- Building with the Claude API — Anthropic (2026)
+- Claude Code 101 — Anthropic (2026)
+- Oracle Next Education - Front End — Alura Latam (2023)
+- Foundations: Data, Data, Everywhere — Google (2023)
+- Automate tasks and processes with Jira — Coursera (2022)
+
+EDUCATION:
+- Associate Degree in Software Development — Universidad Galileo
+- Industrial Bachelor / Computer Technician — Instituto Tecnológico Federico Taylor
+- B.S. in Administrative Engineering — Universidad Galileo (5th semester, paused)
+
+TECHNICAL SKILLS:
+- Languages: JavaScript, Python, TypeScript, Node.js, SQL
+- AI & Automation: OpenAI API, Claude API, n8n, prompt engineering
+- Cloud: GCP, Firebase, Docker, CI/CD
+- APIs: REST APIs, webhooks, Postman, Git
+- PM: Jira, Confluence, Agile/Scrum
+- Languages: Spanish (native), English (B2+)
+
+MATCHED SKILLS: ${matchedSkills.slice(0, 8).join(", ")}
+
+CSS STYLING REQUIREMENTS:
+- NO box-shadow anywhere
+- NO border-radius or rounded corners
+- NO background boxes or containers
+- Clean, flat design with subtle color accents
+- Professional blue (#2C5F7C) for name and section headers ONLY
+- All text on white background
+- Simple horizontal lines for section dividers (1px solid #ddd)
+- No shadows, no gradients, no boxes
+
+HTML STRUCTURE:
 <!DOCTYPE html>
-<html><head><meta charset="UTF-8"><style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:Arial,sans-serif;font-size:10.5pt;line-height:1.4;color:#000;padding:0.4in 0.6in}
-h1{font-size:20pt;font-weight:bold;text-align:center;margin-bottom:4pt}
-.tag{font-size:11.5pt;text-align:center;font-style:italic;margin-bottom:6pt;color:#333}
-.contact{font-size:9.5pt;text-align:center;margin-bottom:14pt;color:#444}
-h2{font-size:11.5pt;font-weight:bold;text-transform:uppercase;margin-top:14pt;margin-bottom:6pt;border-bottom:2pt solid #000;padding-bottom:2pt}
-.job{margin-top:8pt}
-.jt{font-weight:bold;float:left}
-.jd{float:right;font-size:9.5pt;color:#555}
-.jc{clear:both;font-style:italic;font-size:10pt;margin-bottom:4pt}
-ul{margin:4pt 0 8pt 18pt}
-li{margin:3pt 0}
-.cert{margin:3pt 0 3pt 18pt;position:relative}
-.cert:before{content:"•";position:absolute;left:-18pt}
-.sk{margin:4pt 0}
-.skl{font-weight:bold}
-</style></head><body>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+body { font-family: Arial, Helvetica, sans-serif; max-width: 8.5in; margin: 0 auto; padding: 0.5in; line-height: 1.5; color: #333; }
+h1 { color: #2C5F7C; font-size: 28px; margin: 0; padding: 0; border: none; box-shadow: none; }
+h2 { color: #2C5F7C; font-size: 14px; text-transform: uppercase; margin-top: 20px; margin-bottom: 10px; border-bottom: 1px solid #ddd; padding-bottom: 5px; box-shadow: none; }
+h3 { font-size: 12px; font-weight: bold; margin: 10px 0 5px 0; box-shadow: none; }
+p, li { font-size: 10pt; margin: 5px 0; }
+ul { margin: 0; padding-left: 20px; }
+.contact { font-size: 9pt; color: #666; margin-bottom: 20px; }
+.job-title { font-weight: bold; margin-bottom: 2px; }
+.company { font-style: italic; margin-bottom: 5px; }
+.dates { color: #666; font-size: 9pt; }
+</style>
+</head>
+<body>
 
-<h1>MARCOS RODAS</h1>
-<div class="tag">[Job-specific title - e.g. "Technical Product Manager — AI & Automation"]</div>
-<div class="contact">Guatemala City  |  +502 40154866  |  maodas00@gmail.com  |  maodas.online  |  linkedin.com/in/marcos-rodas</div>
+[YOUR CONTENT HERE - Name, Contact, Summary, Experience, Certifications, Education, Skills]
 
-<h2>PROFESSIONAL SUMMARY</h2>
-<p>[3-4 sentences, use job keywords, 5+ years, mention certs]</p>
+</body>
+</html>
 
-<h2>CORE COMPETENCIES</h2>
-<p>[Matched skills first • separated • by bullets]</p>
+XYZ FORMAT: "Achieved [result] by [action], which resulted in [impact]"
 
-<h2>PROFESSIONAL EXPERIENCE</h2>
+Return ONLY complete HTML. No markdown, no shadows, no boxes.`;
 
-<div class="job">
-<div class="jt">Project Coordinator — Digital Platforms</div>
-<div class="jd">Jul 2024 – Present</div>
-<div class="jc">IOM (International Organization for Migration) — ROOTS Program</div>
-<ul><li>[Adapted bullet]</li><li>[Adapted bullet]</li><li>[Adapted bullet]</li></ul>
-</div>
-
-<div class="job">
-<div class="jt">Automation & AI Solutions Specialist</div>
-<div class="jd">2022 – 2024</div>
-<div class="jc">IOM — ROOTS Program</div>
-<ul><li>[Bullet]</li><li>[Bullet]</li></ul>
-</div>
-
-<div class="job">
-<div class="jt">Operations Manager</div>
-<div class="jd">Feb 2012 – Aug 2023</div>
-<div class="jc">IDC Los Tres, S.A.</div>
-<ul><li>[Bullet]</li><li>[Bullet]</li></ul>
-</div>
-
-<h2>CERTIFICATIONS</h2>
-<div class="cert">Google Project Management Certificate — Google/Coursera (2023)</div>
-<div class="cert">AI Fluency Framework & Foundations — Anthropic (2026)</div>
-[Add relevant optional certs]
-
-<h2>TECHNICAL SKILLS</h2>
-<div class="sk"><span class="skl">Languages:</span> JavaScript, TypeScript, Python, SQL</div>
-<div class="sk"><span class="skl">AI & Automation:</span> [List]</div>
-<div class="sk"><span class="skl">Cloud:</span> [List]</div>
-
-<h2>EDUCATION</h2>
-<div class="cert">Associate Degree in Software Development — Universidad Galileo (2023)</div>
-<div class="cert">B.S. in Administrative Engineering — Universidad Galileo (In Progress)</div>
-
-</body></html>
-
-Return HTML only, no backticks.`;
-
-  let cv = await callClaude(prompt, "claude-haiku-4-5-20251001", 0.6);
+  let cv = await callClaude(prompt, "claude-haiku-4-5-20251001", 0.5);
   cv = cv.replace(/```html\n?/g, '').replace(/```\n?/g, '').trim();
+  
+  if (!cv.includes('<!DOCTYPE html>')) {
+    cv = '<!DOCTYPE html>\n<html>\n<head><meta charset="UTF-8"></head>\n<body>\n' + cv + '\n</body></html>';
+  }
+  
   return cv;
 }
 
 async function generateCoverLetter(jobData, profileData, matchedSkills) {
-  const certs = profileData.certifications || [];
-  const alwaysInclude = certs.filter(c => c.always_include);
+  const jobPosition = jobData.title || 'Position';
+  const company = jobData.company || 'this company';
   
-  const prompt = `Write EXCEPTIONAL cover letter - specific, compelling, authentic.
+  const prompt = `Write professional cover letter for ${jobPosition} at ${company}.
 
-JOB: ${jobData.title} at ${jobData.company}
-DESC: ${(jobData.description || "").slice(0, 900)}
+JOB: ${jobPosition}
+COMPANY: ${company}
+DESCRIPTION: ${(jobData.description || "").slice(0, 900)}
 
-PERSON: 5+ yrs AI automation, n8n expert, ${alwaysInclude.map(c => c.name).join(", ")}
-SKILLS: ${matchedSkills.slice(0, 6).join(", ")}
+REAL INFO:
+- Marcos Rodas
+- Project Coordinator at IOM (USAID/DoS programs) - 2+ years
+- Reported TO USAID/DoS while implementing FOR Guatemalan government
+- Expert: n8n, OpenAI/Claude APIs, Python, Node.js
+- Google PM Certificate, AI Fluency Framework
+- Contact: maodas00@gmail.com | +502 40154866 | maodas.online | linkedin.com/in/marcos-rodas
+
+MATCHED SKILLS: ${matchedSkills.slice(0, 6).join(", ")}
 
 RULES:
 - NO "I am writing to express"
-- Start with something specific about THEIR company/product
-- Tell ONE specific story with metrics
-- Show genuine enthusiasm
-- 300-350 words, 3-4 paras
+- Hook about THEIR company
+- ONE real story with metrics
+- 300-350 words, 3-4 paragraphs
+- Plain text only (NO markdown)
 
-EXACT FORMAT:
+FORMAT:
                                                                 Guatemala City
 
 Dear Hiring Manager,
 
-[Hook paragraph - specific to their company/product]
-
-[Story paragraph - concrete example with metrics from your work]
-
-[Fit paragraph - why you are uniquely positioned for THIS role]
-
-[Close - brief and confident]
+[Hook]
+[Story with metrics]
+[Why perfect for role]
+[Close]
 
 Best regards,
+
 Marcos Rodas
 maodas00@gmail.com | +502 40154866 | maodas.online | linkedin.com/in/marcos-rodas
 
-CRITICAL: Location "Guatemala City" goes TOP RIGHT. Contact info goes BOTTOM after signature.`;
+ONLY real information.`;
 
   const letter = await callClaude(prompt, "claude-haiku-4-5-20251001", 0.7);
   return letter.trim();
@@ -202,8 +229,9 @@ async function htmlToPdf(html, outputPath) {
   await page.pdf({
     path: outputPath,
     format: 'Letter',
-    printBackground: false,
-    margin: { top: '0.4in', right: '0.6in', bottom: '0.4in', left: '0.6in' }
+    printBackground: true,
+    preferCSSPageSize: false,
+    margin: { top: '0.5in', right: '0.6in', bottom: '0.5in', left: '0.6in' }
   });
   await browser.close();
 }
