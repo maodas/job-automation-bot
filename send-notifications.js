@@ -63,6 +63,7 @@ function sendTelegram(jobs) {
   const req = https.request(options, (res) => {
     if (res.statusCode === 200) {
       console.log('✅ Telegram notification sent');
+      process.exit(0);
     } else {
       let body = '';
       res.on('data', d => body += d);
