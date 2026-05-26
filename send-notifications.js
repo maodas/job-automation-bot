@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+require('dotenv').config({path: '/home/marcos/job-bot/.env'});
 const https = require('https');
 const fs = require('fs');
 const { execSync } = require('child_process');
@@ -17,28 +18,28 @@ function sendTelegram(jobs) {
   const goodMatches = jobs.filter(j => j.score >= 75 && j.score < 85);
   const decent = jobs.filter(j => j.score >= 70 && j.score < 75);
   
-  let message = `🎯 Job Alert - ${jobs.length} High-Scoring Jobs Found!\n\n`;
+  let message = 'Job Alert - ' + jobs.length + ' High-Scoring Jobs Found!\n\n';
   
   if (highPriority.length > 0) {
-    message += `⭐ HIGH PRIORITY (85+):\n`;
+    message += 'HIGH PRIORITY (85+):\n';
     highPriority.forEach((j, i) => {
-      message += `${i+1}. ${j.title} @ ${j.company} - ${j.score}/100\n`;
+      message += (i+1) + '. ' + j.title + ' @ ' + j.company + ' - ' + j.score + '/100\n';
     });
     message += '\n';
   }
   
   if (goodMatches.length > 0) {
-    message += `✅ GOOD MATCHES (75-84):\n`;
+    message += 'GOOD MATCHES (75-84):\n';
     goodMatches.forEach((j, i) => {
-      message += `${i+1}. ${j.title} @ ${j.company} - ${j.score}/100\n`;
+      message += (i+1) + '. ' + j.title + ' @ ' + j.company + ' - ' + j.score + '/100\n';
     });
     message += '\n';
   }
   
   if (decent.length > 0) {
-    message += `📋 DECENT MATCHES (70-74):\n`;
+    message += 'DECENT MATCHES (70-74):\n';
     decent.forEach((j, i) => {
-      message += `${i+1}. ${j.title} @ ${j.company} - ${j.score}/100\n`;
+      message += (i+1) + '. ' + j.title + ' @ ' + j.company + ' - ' + j.score + '/100\n';
     });
   }
   
@@ -51,11 +52,11 @@ function sendTelegram(jobs) {
   
   const options = {
     hostname: 'api.telegram.org',
-    path: `/bot${TELEGRAM_TOKEN}/sendMessage`,
+    path: '/bot' + TELEGRAM_TOKEN + '/sendMessage',
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Content-Length': data.length
+      'Content-Length': Buffer.byteLength(data)
     }
   };
   
@@ -63,7 +64,9 @@ function sendTelegram(jobs) {
     if (res.statusCode === 200) {
       console.log('✅ Telegram notification sent');
     } else {
-      console.log('⚠️  Telegram failed:', res.statusCode);
+      let body = '';
+      res.on('data', d => body += d);
+      res.on('end', () => console.log('Telegram failed:', body));
     }
   });
   
@@ -72,7 +75,6 @@ function sendTelegram(jobs) {
   req.end();
 }
 
-// Check for new high-scoring jobs
 try {
   const result = execSync(
     "sudo -u postgres psql job_automation -t -A -F'|' -c \"SELECT id, title, company, ai_score FROM jobs WHERE ai_score >= 70 AND status = 'scored' AND created_at > NOW() - INTERVAL '2 hours' ORDER BY ai_score DESC\""
@@ -90,8 +92,6 @@ try {
   
   if (jobs.length > 0) {
     sendTelegram(jobs);
-    // Mark as notified
-    fs.writeFileSync(NOTIFICATION_FILE, JSON.stringify(jobs.map(j => j.id)));
   } else {
     console.log('No notifications to send');
   }
