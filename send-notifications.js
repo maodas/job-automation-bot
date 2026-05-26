@@ -4,7 +4,6 @@ const fs = require('fs');
 const { execSync } = require('child_process');
 
 const NOTIFICATION_FILE = '/home/marcos/job-bot/notifications/pending.json';
-const EMAIL = process.env.NOTIFICATION_EMAIL || 'marcos@logox.tech';
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_CHAT = process.env.TELEGRAM_CHAT_ID || '';
 
@@ -16,11 +15,12 @@ function sendTelegram(jobs) {
   
   const highPriority = jobs.filter(j => j.score >= 85);
   const goodMatches = jobs.filter(j => j.score >= 75 && j.score < 85);
+  const decent = jobs.filter(j => j.score >= 70 && j.score < 75);
   
-  let message = `Job Alert - ${jobs.length} High-Scoring Jobs Found!\n\n`;
+  let message = `🎯 Job Alert - ${jobs.length} High-Scoring Jobs Found!\n\n`;
   
   if (highPriority.length > 0) {
-    message += `HIGH PRIORITY (85+):\n`;
+    message += `⭐ HIGH PRIORITY (85+):\n`;
     highPriority.forEach((j, i) => {
       message += `${i+1}. ${j.title} @ ${j.company} - ${j.score}/100\n`;
     });
@@ -28,14 +28,21 @@ function sendTelegram(jobs) {
   }
   
   if (goodMatches.length > 0) {
-    message += `GOOD MATCHES (75-84):\n`;
+    message += `✅ GOOD MATCHES (75-84):\n`;
     goodMatches.forEach((j, i) => {
       message += `${i+1}. ${j.title} @ ${j.company} - ${j.score}/100\n`;
     });
     message += '\n';
   }
   
-  message += `View all & download CVs:\nhttps://docs.google.com/spreadsheets/d/${process.env.GOOGLE_SHEETS_ID}/edit`;
+  if (decent.length > 0) {
+    message += `📋 DECENT MATCHES (70-74):\n`;
+    decent.forEach((j, i) => {
+      message += `${i+1}. ${j.title} @ ${j.company} - ${j.score}/100\n`;
+    });
+  }
+  
+  message += '\nCheck Google Sheets for CVs and cover letters.';
   
   const data = JSON.stringify({
     chat_id: TELEGRAM_CHAT,
@@ -48,13 +55,16 @@ function sendTelegram(jobs) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Content-Length': Buffer.byteLength(data)
+      'Content-Length': data.length
     }
   };
   
   const req = https.request(options, (res) => {
-    res.on('data', () => {});
-    res.on('end', () => console.log('✅ Telegram sent'));
+    if (res.statusCode === 200) {
+      console.log('✅ Telegram notification sent');
+    } else {
+      console.log('⚠️  Telegram failed:', res.statusCode);
+    }
   });
   
   req.on('error', (e) => console.error('Telegram error:', e.message));
@@ -62,38 +72,29 @@ function sendTelegram(jobs) {
   req.end();
 }
 
-function sendEmail(jobs) {
-  const msg = `${jobs.length} High-Scoring Jobs!\n\n${jobs.map((j,i) => 
-    `${i+1}. ${j.title} @ ${j.company} - Score: ${j.score}/100`
-  ).join('\n')}`;
-  
-  try {
-    execSync(`echo "${msg}" | mail -s "Job Alert" ${EMAIL}`);
-    console.log('✅ Email sent');
-  } catch(e) {
-    console.log('Email failed:', e.message);
-  }
-}
-
-// Main execution
+// Check for new high-scoring jobs
 try {
-  const data = JSON.parse(fs.readFileSync(NOTIFICATION_FILE, 'utf8'));
+  const result = execSync(
+    "sudo -u postgres psql job_automation -t -A -F'|' -c \"SELECT id, title, company, ai_score FROM jobs WHERE ai_score >= 70 AND status = 'scored' AND created_at > NOW() - INTERVAL '2 hours' ORDER BY ai_score DESC\""
+  ).toString().trim();
   
-  if (data.length > 0) {
-    const allJobs = data.flatMap(n => n.jobs || [n]);
-    
-    console.log(`Processing ${allJobs.length} notification(s)...`);
-    
-    sendTelegram(allJobs);
-    sendEmail(allJobs);
-    
-    // Clear queue
-    fs.writeFileSync(NOTIFICATION_FILE, '[]');
-    console.log('✅ Notifications sent and queue cleared');
+  if (!result) {
+    console.log('No notifications to send');
+    process.exit(0);
+  }
+  
+  const jobs = result.split('\n').map(line => {
+    const [id, title, company, score] = line.split('|');
+    return { id, title, company, score: parseInt(score) };
+  });
+  
+  if (jobs.length > 0) {
+    sendTelegram(jobs);
+    // Mark as notified
+    fs.writeFileSync(NOTIFICATION_FILE, JSON.stringify(jobs.map(j => j.id)));
   } else {
     console.log('No notifications to send');
   }
-} catch(e) {
-  console.log('Creating empty notification queue');
-  fs.writeFileSync(NOTIFICATION_FILE, '[]');
+} catch (e) {
+  console.error('Error:', e.message);
 }
