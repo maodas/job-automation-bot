@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+require('dotenv').config({path: '/home/marcos/job-bot/.env'});
 const { google } = require('googleapis');
 const { execSync } = require('child_process');
 const fs = require('fs');
